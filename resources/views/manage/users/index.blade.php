@@ -4,6 +4,7 @@ use App\Models\User;
 use Spatie\Permission\Models\{Role,Permission};
 use Mary\Traits\Toast;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 
 new class extends \Livewire\Volt\Component {
@@ -17,7 +18,7 @@ new class extends \Livewire\Volt\Component {
 
     public array $headers = [];
 
-    // dictionaries – loaded once
+    // dictionaries � loaded once
     public array $roles = [];
     public array $permissions = [];
 
@@ -100,14 +101,22 @@ new class extends \Livewire\Volt\Component {
         $this->permIds = array_values(array_map('intval', (array) $this->permIds));
 
         $rules = [
-            'name'  => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:users,email,'.$this->userId,
-            'roleIds' => 'array',
+            'name'      => 'required|string|max:255',
+            'email'     => [
+                'required',
+                'email',
+                'max:255',
+                Rule::unique('users', 'email')->ignore($this->userId),
+            ],
+            'roleIds'   => 'array',
             'roleIds.*' => 'integer|exists:roles,id',
-            'permIds' => 'array',
+            'permIds'   => 'array',
             'permIds.*' => 'integer|exists:permissions,id',
         ];
-        if (! $this->userId) $rules['password'] = 'required|string|min:6';
+
+        if (! $this->userId) {
+            $rules['password'] = 'required|string|min:6';
+        }
 
         $this->validate($rules);
 
@@ -115,11 +124,14 @@ new class extends \Livewire\Volt\Component {
             'name'  => $this->name,
             'email' => $this->email,
         ];
-        if ($this->password) $data['password'] = Hash::make($this->password);
+
+        if ($this->password) {
+            $data['password'] = Hash::make($this->password);
+        }
 
         $user = User::updateOrCreate(['id' => $this->userId], $data);
-        $user->syncRoles($this->roleIds);       // ids – no name conversion
-        $user->syncPermissions($this->permIds); // ids – no name conversion
+        $user->syncRoles($this->roleIds);
+        $user->syncPermissions($this->permIds);
 
         $this->success($this->userId ? 'User updated' : 'User created');
         $this->showUserModal = false;
@@ -134,9 +146,8 @@ new class extends \Livewire\Volt\Component {
 
     public function createRole(): void
     {
-        $name = $this->validateOnly('newRoleName', ['newRoleName'=>'required|string|max:255|unique:roles,name'])['newRoleName'];
+        $name = $this->validateOnly('newRoleName', ['newRoleName' => 'required|string|max:255|unique:roles,name'])['newRoleName'];
         $role = Role::create(['name' => $name]);
-        // ensure array before appending in case the select sent a string
         $this->roleIds = array_values(array_map('intval', (array) $this->roleIds));
         $this->roleIds[] = (int) $role->id;
         $this->loadDictionaries();
@@ -146,9 +157,8 @@ new class extends \Livewire\Volt\Component {
 
     public function createPerm(): void
     {
-        $name = $this->validateOnly('newPermName', ['newPermName'=>'required|string|max:255|unique:permissions,name'])['newPermName'];
+        $name = $this->validateOnly('newPermName', ['newPermName' => 'required|string|max:255|unique:permissions,name'])['newPermName'];
         $perm = Permission::create(['name' => $name]);
-        // ensure array before appending in case the select sent a string
         $this->permIds = array_values(array_map('intval', (array) $this->permIds));
         $this->permIds[] = (int) $perm->id;
         $this->loadDictionaries();
